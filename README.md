@@ -89,6 +89,7 @@ Remember the training slash. Best option is to add the following line in the
 
 ```
 echo "dproxy" > /etc/sd-proxy-vmname.conf
+```
 
 # Example usage
 
