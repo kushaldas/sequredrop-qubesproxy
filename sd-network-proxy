@@ -1,0 +1,234 @@
+#!/usr/bin/python3
+
+import os
+import json
+from sdclientapi import *
+
+
+# We need this to print output as JSON
+def print_json(data):
+    print(json.dumps(data, default=lambda obj: obj.__dict__))
+
+
+# Decorator to be user for every API call.
+def handle_error(func):
+    """
+    Decorator to handle api errors.
+    To be used in all but on the authentication call
+    """
+
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as err:
+            result = {"sdproxyerror": "{}".format(err)}
+            print_json(result)
+            return
+
+    return wrapper
+
+
+def read_server_url():
+    """Returns the server URL.
+
+    default value: http://localhost:8081/
+    """
+    server = ""
+    if os.path.exists("/etc/qubesproxy.conf"):
+        with open("/etc/qubesproxy.conf") as fobj:
+            server = fobj.read().strip()
+    else:
+        server = "http://localhost:8081/"
+
+    return server
+
+
+# Internal function to create the api object
+def __create_api(token):
+    server = read_server_url()
+    proxy = ".onion" in server
+    api = API(server, "", "", "", proxy)
+    api.token = json.loads(token)
+    api.update_auth_header()
+
+    return api
+
+
+def login(authdata):
+    "To login and return the token"
+    server = read_server_url()
+    proxy = ".onion" in server
+    api = API(server, authdata["username"], authdata["password"], authdata["otp"], proxy)
+
+    try:
+        api.authenticate()
+    except Exception as err:  # Means we have auth error
+        result = {"sdproxyerror": "Error in authentication.: {}".format(authdata)}
+        print_json(result)
+        return
+
+    # Now return the token to the caller.
+    print_json(api.token)
+
+
+@handle_error
+def get_all_sources(token):
+    """
+    Gets list of all sources from the server.
+
+    :param token: the str version of the token
+    """
+    api = __create_api(token)
+    sources = api.get_sources()
+
+    print_json(sources)
+
+
+@handle_error
+def get_source(data):
+    """
+    Returns a source based on input uuid.
+    """
+    api = __create_api(data["token"])
+    source = api.get_source_from_string(data["uuid"])
+
+    print_json(source)
+
+
+@handle_error
+def delete_source(data):
+    """
+    Returns a source based on input uuid.
+    """
+    api = __create_api(data["token"])
+    result = api.delete_source_from_string(data["uuid"])
+
+    print_json(result)
+
+
+@handle_error
+def add_star(data):
+    """
+    Adds a star to a given source
+    """
+    api = __create_api(data["token"])
+    source = api.get_source_from_string(data["uuid"])
+    result = api.add_star(source)
+
+    print_json(result)
+
+
+@handle_error
+def remove_star(data):
+    """
+    Removes a star to a given source
+    """
+    api = __create_api(data["token"])
+    source = api.get_source_from_string(data["uuid"])
+    result = api.remove_star(source)
+
+    print_json(result)
+
+
+@handle_error
+def get_submissions(data):
+    """
+    Get all submissions for a given source uuid
+    """
+    api = __create_api(data["token"])
+    source = api.get_source_from_string(data["uuid"])
+    result = api.get_submissions(source)
+
+    print_json(result)
+
+
+@handle_error
+def get_submission(data):
+    """
+    Get a single submission for a given source and submission uuid
+    """
+    api = __create_api(data["token"])
+    result = api.get_submission_from_string(data["uuid"], data["source_uuid"])
+
+    print_json(result)
+
+
+@handle_error
+def get_all_submissions(data):
+    """
+    Get all submissions from the server
+    """
+    api = __create_api(data["token"])
+    result = api.get_all_submissions()
+
+    print_json(result)
+
+
+@handle_error
+def delete_submission(data):
+    """
+    Deletes a single submission for a given source and submission uuid
+    """
+    api = __create_api(data["token"])
+    result = api.delete_submission_from_string(data["uuid"], data["source_uuid"])
+
+    print_json(result)
+
+
+@handle_error
+def flag_source(data):
+    """
+    Flags a given source
+    """
+    api = __create_api(data["token"])
+    source = api.get_source_from_string(data["uuid"])
+    result = api.flag_source(source)
+
+    print_json(result)
+
+
+@handle_error
+def get_current_user(data):
+    """
+    Get current user information
+    """
+    api = __create_api(data["token"])
+    result = api.get_current_user()
+
+    print_json(result)
+
+
+# This is the global list of commands available
+COMMANDS = {
+    "login": login,
+    "get_all_sources": get_all_sources,
+    "get_source": get_source,
+    "delete_source": delete_source,
+    "add_star": add_star,
+    "remove_star": remove_star,
+    "get_submissions": get_submissions,
+    "get_submission": get_submission,
+    "get_all_submissions": get_all_submissions,
+    "delete_submission": delete_submission,
+    "flag_source": flag_source,
+    "get_current_user": get_current_user,
+}
+
+
+def main():
+    p = input()
+    p = p.strip()
+    input_data = json.loads(p)
+
+    if not "command" in input_data:
+        print_json({"sdproxyerror": "Command not given, {}".format(input_data)})
+
+    if not input_data["command"] in COMMANDS:
+        print_json({"sdproxyserror": "No such proxy command."})
+
+    # Now find the command and call the function
+    COMMANDS[input_data["command"]](input_data["data"])
+
+
+if __name__ == "__main__":
+    main()
