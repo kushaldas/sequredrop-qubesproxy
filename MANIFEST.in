@@ -1,0 +1,6 @@
+include sdqubes.py
+include sd-network-proxy
+include LICENSE
+include setup.py
+include qubes.SDProxy
+include README.md
